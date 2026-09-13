@@ -156,10 +156,6 @@ Regenerate the README animations with:
 .\scripts\with_3dgs.cmd python scripts\export_readme_gifs.py
 ```
 
-See [RADEGS_RUN.md](RADEGS_RUN.md) for dataset provenance, exact revisions,
-training settings, metrics, and compatibility changes; and
-[LINE_DRAWING.md](LINE_DRAWING.md) for the full feature-field implementation.
-
 ## Repository layout
 
 ```text
@@ -180,8 +176,8 @@ This repository vendors modified RaDe-GS and Gaussian Splatting research code.
 The original notices and license files are retained in their corresponding
 directories. Gaussian Splatting components are restricted to research and
 evaluation use and prohibit commercial use without permission. Review
-[`external/RaDe-GS/LICENSE.md`](external/RaDe-GS/LICENSE.md) and
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) before redistribution or use.
+[`external/RaDe-GS/LICENSE.md`](external/RaDe-GS/LICENSE.md) before
+redistribution or use.
 
 The Lego dataset and original Blender asset are not redistributed by this
 repository.
