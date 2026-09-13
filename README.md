@@ -14,8 +14,9 @@ the authors' exact implementation.
 
 ## Results
 
-All three animations use the same trained Gaussian model and synchronized 360°
-camera path. They loop automatically.
+All three views are baked into a single looping GIF, side by side, so they are
+always frame-synchronized regardless of how the browser loads the page; the
+same trained Gaussian model and 360° camera path drive all three panels.
 
 <table>
   <tr>
@@ -24,9 +25,7 @@ camera path. They loop automatically.
     <th width="33%">RGB + feature lines</th>
   </tr>
   <tr>
-    <td><img src="assets/lego_rgb.gif" width="100%" alt="Rotating original RGB rendering"></td>
-    <td><img src="assets/lego_lines.gif" width="100%" alt="Rotating feature-line rendering"></td>
-    <td><img src="assets/lego_composite.gif" width="100%" alt="Rotating composite rendering"></td>
+    <td colspan="3"><img src="assets/lego_combined.gif" width="100%" alt="Synchronized rotating RGB, feature-line, and composite renderings"></td>
   </tr>
 </table>
 
