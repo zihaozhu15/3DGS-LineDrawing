@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lego · Line Studio</title><link rel="stylesheet" href="/static/style.css"><style>.performance-hud{position:absolute;z-index:2;top:15px;right:15px;display:grid;grid-template-columns:auto auto;align-items:baseline;column-gap:5px;background:#17202bea;color:white;border-radius:10px;padding:10px 13px;pointer-events:none;box-shadow:0 4px 16px #17202b22}.performance-hud b{font-size:27px;line-height:1;font-weight:650;font-variant-numeric:tabular-nums}.performance-hud span{font-size:10px;letter-spacing:1px;color:#aab6c5}.performance-hud small{grid-column:1/-1;margin-top:5px;font-size:9px;color:#b9c4d1;font-variant-numeric:tabular-nums}</style></head>
+<body>
+<header><div class="brand"><span class="brand-icon">▱</span><div>LINE STUDIO <small>3D Gaussian · 特征线实验室</small></div></div><div class="header-meta"><span class="dot"></span><span id="connection">连接渲染器</span><span class="sep"></span><span>LEGO / RaDe-GS</span></div><button id="save" class="primary">↓ 导出当前图像</button></header>
+<main>
+<aside class="controls">
+<div class="section-title">线条工作台 <span>01 / STYLE</span></div>
+<p class="hint">从光栅化信息生成线条。调节参数，探索结构与细节。</p>
+<div class="preset-row"><button data-style="balanced" class="active">均衡</button><button data-style="clean">结构</button><button data-style="detail">细节</button></div>
+<div class="section-title small">特征线场 <span>阈值 ↑ · 线条 ↓</span></div>
+<div id="fields"></div>
+<div class="preset-row"><button id="topkOnly">仅 Top-k</button><button id="benchmarkFields">GPU 性能测试</button></div>
+<div id="benchmarkResult" class="hint"></div>
+<div class="section-title small">笔触与纸张</div>
+<label class="control-label">线宽 <output id="widthValue">1 px</output></label><input id="width" type="range" min="1" max="4" step="1" value="1">
+<label class="control-label">边缘柔和度 <output id="softnessValue">0.25</output></label><input id="softness" type="range" min=".05" max="1" step=".05" value=".25">
+<label class="control-label">弱线抑制 <output id="detail_floorValue">0.22</output></label><input id="detail_floor" type="range" min="0" max=".7" step=".01" value=".22">
+<div class="color-row"><label>墨色 <input type="color" id="ink" value="#202731"></label><label>纸色 <input type="color" id="paper" value="#ffffff"></label></div>
+<details><summary>采样与前景</summary><label class="control-label">Top-k 数量 <select id="k"><option value="4">4</option><option value="8" selected>8</option></select></label><label class="control-label">前景不透明度门限 <output id="foregroundValue">0.50</output></label><input id="foreground" type="range" min=".1" max=".95" step=".05" value=".5"><p class="hint">深度、法线、颜色和贡献差异仅比较有效前景。不透明度场保留外轮廓。</p></details>
+<button id="resetStyle" class="text-button">↺ 重置线条参数</button>
+</aside>
+<section class="stage">
+<div class="stage-toolbar"><div class="tabs"><button data-mode="rgb">原始 RGB</button><button data-mode="lines">线稿</button><button data-mode="composite" class="active">叠加</button></div><select id="mode" aria-label="显示模式"><option value="composite">线稿叠加</option><option value="lines">纯线稿</option><option value="rgb">原始 RGB</option><optgroup label="光栅化信息"><option value="depth">深度</option><option value="normal">法线</option><option value="opacity">不透明度</option><option value="coverage">Top-k 贡献覆盖率</option><option value="ids">主导 Gaussian ID</option></optgroup><optgroup label="单独特征线"><option value="edge_opacity">不透明度线</option><option value="edge_depth">深度线</option><option value="edge_normal">法线线</option><option value="edge_color">色调线</option><option value="edge_topk">Top-k 贡献线</option></optgroup></select></div>
+<div class="canvas-area" id="canvasArea"><div class="performance-hud"><b id="fps">0</b><span>FPS</span><small id="frameTiming">等待首帧</small></div><div class="view-badge"><span class="dot"></span><span id="viewLabel">线稿叠加</span></div><canvas id="viewport" width="640" height="640" aria-label="交互式拖拉机视图"></canvas><div id="loading" class="loading">正在载入 Gaussian 场景…</div><div id="error" class="error" hidden></div><div class="canvas-footer"><span>拖动旋转 · 滚轮缩放 · 右键 / Shift 拖动平移</span><span>单击检查像素</span></div></div>
+<div class="camera-bar"><label>视角 <select id="camera"></select></label><button id="resetCamera">↺ 复位</button><button id="rotate">▷ 自动环绕</button><div class="spacer"></div><label>清晰度 <select id="resolution"><option value="768">768 px · 流畅</option><option value="1024">1024 px</option><option value="1536" selected>1536 px · 高清</option><option value="2048">2048 px · 超清</option></select></label></div>
+<div class="filmstrip" id="filmstrip"></div>
+<footer class="stage-status"><span>下方预览固定为初始视角，不随主画面更新</span><span id="timing">等待首帧</span><span id="poseLabel">自由视角</span></footer>
+</section>
+<aside class="inspector">
+<div class="section-title">场景信息 <span>02 / INSPECT</span></div>
+<div class="model-card"><span class="eyebrow">NERF SYNTHETIC</span><h2>Lego Bulldozer</h2><p>RaDe-GS · 30,000 iterations</p><div class="stat-grid"><div><b id="count">—</b><span>Gaussian 数量</span></div><div><b id="visible">—</b><span>视锥内 Gaussian</span></div><div><b id="coverage">—</b><span>Top-k 覆盖率</span></div><div><b id="lineFraction">—</b><span>线条像素占比</span></div></div><p class="gpu" id="gpu">CUDA</p></div>
+<div class="section-title small">像素探针 <span id="pixelCoord">点击图像</span></div><div id="probe"><div class="empty-probe"><span>⌖</span><p>单击模型，检查深度、法线和相邻像素的 Gaussian 贡献。</p></div></div>
+<details class="method" open><summary>方法说明</summary><p>比较四邻域中的不透明度、相对深度、法线方向、亮度，以及按 ID 对齐的 Top-k 贡献分布。</p><p>Top-k 来自实际光栅化内部状态。距离公式、阈值和融合方式是本次复现设计，海报未公开这些细节。</p><p>当前输出是视图相关线稿；跨视角线条稳定性仍需进一步研究。</p></details>
+</aside>
+</main><script src="/static/app.js"></script></body></html>

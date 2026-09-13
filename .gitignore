@@ -1,0 +1,36 @@
+# Local datasets and downloaded archives
+data/
+*.zip
+
+# Trained models and generated outputs
+outputs/
+*.pth
+*.pt
+*.ply
+*.npz
+events.out.tfevents.*
+
+# Local logs and vendor Git metadata backups
+logs/
+.vendor-git-backup/
+
+# Python caches and native build products
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+*.pyd
+*.so
+*.obj
+*.lib
+*.exp
+*.dll
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
