@@ -22,12 +22,14 @@ MODES = ["rgb", "lines", "composite"]
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--frames", type=int, default=96)
-    parser.add_argument("--size", type=int, default=800)
-    parser.add_argument("--fps", type=int, default=16)
-    parser.add_argument("--gutter", type=int, default=6)
+    parser.add_argument("--frames", type=int, default=180)
+    parser.add_argument("--render-size", type=int, default=768)
+    parser.add_argument("--gif-size", type=int, default=600)
+    parser.add_argument("--fps", type=int, default=25)
+    parser.add_argument("--gutter", type=int, default=4)
+    parser.add_argument("--colors", type=int, default=256)
     args = parser.parse_args()
-    if args.frames < 2 or args.size < 64 or args.fps < 1 or args.gutter < 0:
+    if args.frames < 2 or args.gif_size < 64 or args.fps < 1 or args.gutter < 0 or not (2 <= args.colors <= 256):
         raise ValueError("Invalid animation settings")
 
     renderer = LineRenderer()
@@ -35,7 +37,7 @@ def main():
     base.pop("name", None)
     options = dict(renderer.info()["defaults"])
 
-    canvas_size = (len(MODES) * args.size + (len(MODES) - 1) * args.gutter, args.size)
+    canvas_size = (len(MODES) * args.gif_size + (len(MODES) - 1) * args.gutter, args.gif_size)
     frames = []
     for frame in range(args.frames):
         pose = dict(base)
@@ -45,12 +47,14 @@ def main():
             rgb8, _, end = renderer.fast_frame({
                 "pose": pose,
                 "mode": mode,
-                "resolution": args.size,
+                "resolution": args.render_size,
                 "options": options,
             })
             end.synchronize()
             panel = Image.fromarray(rgb8.cpu().numpy(), "RGB")
-            canvas.paste(panel, (i * (args.size + args.gutter), 0))
+            if args.gif_size != args.render_size:
+                panel = panel.resize((args.gif_size, args.gif_size), Image.Resampling.LANCZOS)
+            canvas.paste(panel, (i * (args.gif_size + args.gutter), 0))
         frames.append(canvas)
         print(f"Rendered {frame + 1}/{args.frames}", flush=True)
 
@@ -58,6 +62,9 @@ def main():
     destination.mkdir(exist_ok=True)
     duration = round(1000 / args.fps)
     path = destination / "lego_combined.gif"
+    if args.colors < 256:
+        shared_palette = frames[0].quantize(colors=args.colors, method=Image.Quantize.FASTOCTREE)
+        frames = [f.quantize(palette=shared_palette, dither=Image.Dither.NONE) for f in frames]
     frames[0].save(path, save_all=True, append_images=frames[1:], duration=duration,
                    loop=0, optimize=True, disposal=2)
     print(f"Saved {path} ({path.stat().st_size / 1024 / 1024:.2f} MiB)", flush=True)
