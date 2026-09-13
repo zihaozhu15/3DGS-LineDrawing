@@ -1,21 +1,188 @@
-# 3DGS-LineDrawing
+# Feature Line Rendering for 3D Gaussian Splatting
 
-基于 RaDe-GS 复现 Lego 场景，并实现海报思路的交互式特征线渲染。
+This repository is an independent reproduction of the **SIGGRAPH Asia 2026
+poster _Feature Line Rendering from Rasterization States in 3D Gaussian
+Splatting_**. It reconstructs the Lego scene with
+[RaDe-GS](https://github.com/HKUST-SAIL/RaDe-GS) and extracts feature lines
+directly from information available during Gaussian rasterization, without
+first reconstructing a mesh.
 
-本仓库直接包含修改后的 RaDe-GS 与 CUDA 光栅器源码，不依赖 Git submodule。上游许可及第三方说明见 `external/RaDe-GS/LICENSE.md` 和 `THIRD_PARTY_NOTICES.md`；其中 Gaussian Splatting 代码仅限研究和评估用途。
+The poster does not publish source code or complete equations. The Top-k
+distance, thresholds, and field-combination rules in this repository are our
+reproduction choices based on the poster diagram. They should not be treated as
+the authors' exact implementation.
 
-已完成：官方 Lego 数据下载、`3dgs` Conda 环境内 CUDA 扩展编译、30,000 次训练和 200 个测试视角渲染。
+## Results
 
-交互查看器：http://127.0.0.1:17865 。重新启动运行 `scripts\start_viewer.cmd`。
+All three animations use the same trained Gaussian model and synchronized 360°
+camera path. They loop automatically.
 
-查看器的主画面使用无 PNG 编码的二进制帧传输，并提供实际显示 FPS 与独立 GPU 基准。下方诊断预览固定为初始视角，不参与实时更新。
+<table>
+  <tr>
+    <th width="33%">Original 3DGS RGB</th>
+    <th width="33%">Feature-line drawing</th>
+    <th width="33%">RGB + feature lines</th>
+  </tr>
+  <tr>
+    <td><img src="assets/lego_rgb.gif" width="100%" alt="Rotating original RGB rendering"></td>
+    <td><img src="assets/lego_lines.gif" width="100%" alt="Rotating feature-line rendering"></td>
+    <td><img src="assets/lego_composite.gif" width="100%" alt="Rotating composite rendering"></td>
+  </tr>
+</table>
 
-- [操作说明与线场算法](LINE_DRAWING.md)
+The reproduced RaDe-GS model contains 178,171 Gaussians after 30,000 training
+iterations. On the 200 held-out NeRF Synthetic Lego views, saved 8-bit RGB
+renders achieve 33.01 dB mean PSNR and 0.9753 mean SSIM.
 
-- [复现命令、代码版本与兼容修改](RADEGS_RUN.md)
-- [环境说明](ENVIRONMENT.md)
-- [海报方法解读](REPRODUCTION_NOTES.md)
+## The central idea: Top-k Gaussian contribution fields
 
-基础 RGB 的最终 PNG 测试集：PSNR 33.01 dB，SSIM 0.9753。特征线使用不透明度、深度、法线、色调与 Top-k Gaussian 贡献信息；具体公式是基于海报的复现设计，尚未实现跨视角稳定的三维曲线。
+A rendered pixel in 3DGS is not produced by a single primitive. Multiple
+projected Gaussians are traversed front to back and alpha-composited. For
+Gaussian $g_i$, its contribution to pixel $p$ is
 
-数据集、训练结果、PLY 模型、日志和编译产物不会提交到 Git。请按照 `RADEGS_RUN.md` 下载数据并复现模型；viewer 默认读取 `outputs/lego_radegs/point_cloud/iteration_30000/point_cloud.ply`。
+$$
+w_i(p) = T_i(p)\,\alpha_i(p),
+$$
+
+where $\alpha_i(p)$ is the Gaussian's opacity at the pixel and $T_i(p)$ is
+the remaining transmittance before that Gaussian is processed. Ordinary RGB
+rendering accumulates these weights with Gaussian colors. This project also
+retains the largest $k$ contributions and their global Gaussian IDs:
+
+$$
+S_p = \{(g_1,w_1),(g_2,w_2),\ldots,(g_k,w_k)\}.
+$$
+
+The ID matters because it tells us whether two neighboring pixels are supported
+by the same 3DGS primitives. The weight tells us how much each matched or
+unmatched primitive matters. For neighboring pixels $p$ and $q$, retained
+weights are normalized independently:
+
+$$
+P_g=\frac{w_g(p)}{\sum_{h\in S_p}w_h(p)}, \qquad
+Q_g=\frac{w_g(q)}{\sum_{h\in S_q}w_h(q)}.
+$$
+
+We align entries by Gaussian ID and measure their shared probability mass:
+
+$$
+O(p,q)=\sum_{g\in S_p\cap S_q}\min(P_g,Q_g).
+$$
+
+The reproduced Top-k discontinuity is
+
+$$
+D_{\mathrm{topk}}(p,q)=1-O(p,q).
+$$
+
+For normalized distributions, this is equivalent to total variation distance
+over the union of Gaussian IDs. Two pixels can therefore have identical Top-k
+ID sets and still be different when their contribution weights change. They can
+also differ by only one low-weight ID and remain similar.
+
+Each pixel is compared with its left, right, upper, and lower neighbors. The
+largest discontinuity becomes its raw Top-k feature-line value:
+
+$$
+E_{\mathrm{topk}}(p)=\max_{q\in N_4(p)}D_{\mathrm{topk}}(p,q).
+$$
+
+Thresholding and a smooth transition convert this scalar field into an ink
+mask. The implementation is in
+[`feature_lines.cu`](external/RaDe-GS/submodules/diff-gaussian-rasterization/feature_lines.cu):
+
+- `topkKernel` replays the rasterizer's sorted splats and records per-pixel IDs
+  and weights;
+- `fieldsKernel` aligns neighboring Top-k sets and evaluates the discontinuity;
+- `renderer.py` applies thresholds, strengths, line dilation, and RGB/ink
+  composition.
+
+This remains a screen-space line detector. Its 3DGS-specific input is the
+per-pixel Gaussian identity and contribution distribution; it does not construct
+persistent curves in 3D. Membership near the k-th position can also change under
+small camera movements, so temporal stability remains an open limitation.
+
+## Other rasterization fields
+
+The viewer can combine Top-k discontinuities with four conventional image-space
+signals obtained from the same rasterization pass:
+
+- **Opacity:** absolute alpha discontinuity, including the outer silhouette.
+- **Depth:** relative depth discontinuity between valid foreground pixels.
+- **Normal:** one minus the cosine similarity of neighboring normals.
+- **Tone:** absolute luminance difference computed from rasterized RGB.
+
+These fields are useful baselines and complementary cues, but they are not
+unique to 3DGS. The Top-k contribution field is the main representation-specific
+part of this reproduction. Every field can be enabled independently and its
+threshold and strength can be adjusted in the viewer.
+
+## Interactive viewer
+
+Start the local viewer from the repository root:
+
+```powershell
+.\scripts\start_viewer.cmd
+```
+
+Open <http://127.0.0.1:17865>. The interface provides free orbit, zoom and pan;
+RGB, line-only and composite views; individual rasterization fields; pixel-level
+Top-k inspection; and separate browser FPS and CUDA timing. RGB, line, and
+composite frames are transferred as raw three-channel RGB and uploaded as WebGL
+textures. Diagnostic thumbnails use a fixed camera and are generated only once.
+
+The viewer expects the trained model at:
+
+```text
+outputs/lego_radegs/point_cloud/iteration_30000/point_cloud.ply
+```
+
+## Reproduction
+
+The tested Windows environment uses Python 3.11, PyTorch 2.7.1 with CUDA 12.8,
+Visual Studio 2019, and an Anaconda environment named `3dgs`. Create the
+environment from `environment.yml`, then run:
+
+```powershell
+.\scripts\with_3dgs.cmd python scripts\prepare_lego.py
+.\scripts\train_lego.cmd
+.\scripts\render_lego.cmd
+.\scripts\with_3dgs.cmd python scripts\export_lego.py -m outputs/lego_radegs
+```
+
+Regenerate the README animations with:
+
+```powershell
+.\scripts\with_3dgs.cmd python scripts\export_readme_gifs.py
+```
+
+See [RADEGS_RUN.md](RADEGS_RUN.md) for dataset provenance, exact revisions,
+training settings, metrics, and compatibility changes; [ENVIRONMENT.md](ENVIRONMENT.md)
+for the Conda/CUDA setup; and [LINE_DRAWING.md](LINE_DRAWING.md) for the full
+feature-field implementation.
+
+## Repository layout
+
+```text
+external/RaDe-GS/          vendored and modified RaDe-GS source
+external/fused-ssim/       vendored fused SSIM dependency
+viewer/                    Flask, CUDA-backed renderer, and WebGL interface
+scripts/                   setup, training, rendering, validation, and GIF tools
+assets/                    rotating README demonstrations
+```
+
+Datasets, checkpoints, trained PLY files, build products, and generated outputs
+are excluded from Git. Follow the reproduction instructions to create them
+locally.
+
+## License and attribution
+
+This repository vendors modified RaDe-GS and Gaussian Splatting research code.
+The original notices and license files are retained in their corresponding
+directories. Gaussian Splatting components are restricted to research and
+evaluation use and prohibit commercial use without permission. Review
+[`external/RaDe-GS/LICENSE.md`](external/RaDe-GS/LICENSE.md) and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) before redistribution or use.
+
+The Lego dataset and original Blender asset are not redistributed by this
+repository.
