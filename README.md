@@ -140,8 +140,8 @@ outputs/lego_radegs/point_cloud/iteration_30000/point_cloud.ply
 ## Reproduction
 
 The tested Windows environment uses Python 3.11, PyTorch 2.7.1 with CUDA 12.8,
-Visual Studio 2019, and an Anaconda environment named `3dgs`. Create the
-environment from `environment.yml`, then run:
+and Visual Studio 2019, in a Conda environment named `3dgs`. Create a matching
+environment, then run:
 
 ```powershell
 .\scripts\with_3dgs.cmd python scripts\prepare_lego.py
@@ -157,9 +157,8 @@ Regenerate the README animations with:
 ```
 
 See [RADEGS_RUN.md](RADEGS_RUN.md) for dataset provenance, exact revisions,
-training settings, metrics, and compatibility changes; [ENVIRONMENT.md](ENVIRONMENT.md)
-for the Conda/CUDA setup; and [LINE_DRAWING.md](LINE_DRAWING.md) for the full
-feature-field implementation.
+training settings, metrics, and compatibility changes; and
+[LINE_DRAWING.md](LINE_DRAWING.md) for the full feature-field implementation.
 
 ## Repository layout
 
